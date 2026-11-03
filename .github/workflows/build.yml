@@ -3,7 +3,15 @@ name: Build IPA & Deploy Pages
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "README.md"
+      - ".gitignore"
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: "强制重新编译 IPA"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -15,10 +23,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: macos-15
+  # 判断是否需要编译：只改分发页 / 脚本时跳过 macOS 编译，复用最新 Release 的 IPA
+  changes:
+    runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.meta.outputs.version }}
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_build }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APP=false
+          if [ "$FORCE" = "true" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            APP=true
+          elif git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE '^(PixNovel/|project\.yml|\.github/workflows/build\.yml)'; then
+            APP=true
+          fi
+          if [ "$APP" = "false" ] && ! gh release view --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            APP=true   # 还没有任何 Release，必须编译
+          fi
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          echo "需要编译 App：$APP"
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -29,43 +65,85 @@ jobs:
           xcodebuild -version
 
       - name: Generate project
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
         run: |
           brew install xcodegen
-          xcodegen generate
+          xcodegen generate --quiet
 
       - name: Build (unsigned)
         run: |
           set -o pipefail
           xcodebuild -project PixNovel.xcodeproj -target PixNovel \
             -configuration Release -sdk iphoneos \
+            -jobs "$(sysctl -n hw.ncpu)" \
             SYMROOT="$PWD/build" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            ENABLE_TESTABILITY=NO VALIDATE_PRODUCT=NO \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tee build.log | grep -E "error:|warning: unre|BUILD" || true
-          test -d build/Release-iphoneos/PixNovel.app || { grep -E "error:" build.log | head -50; exit 1; }
+            build > build.log 2>&1 || { grep -E "error:" build.log | head -50; tail -30 build.log; exit 1; }
+          grep -cE "warning:" build.log | xargs echo "warnings:"
 
       - name: Package IPA
         id: meta
         run: |
           mkdir -p Payload
           cp -R build/Release-iphoneos/PixNovel.app Payload/
-          zip -qry PixNovel.ipa Payload
+          zip -qry -X PixNovel.ipa Payload
           VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Payload/PixNovel.app/Info.plist)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "build=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           ls -lh PixNovel.ipa
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}-build${{ github.run_number }}
+          name: PixNovel ${{ steps.meta.outputs.version }} (build ${{ github.run_number }})
+          make_latest: true
+          body: |
+            未签名 IPA，可用全能签 / LCSign / TrollStore 等工具签名安装。
+            分发页：https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          files: PixNovel.ipa
+
+  # 分发页（Ubuntu，便宜且无需排队 macOS）
+  site:
+    needs: [changes, build]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch latest IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          echo "使用 Release $TAG"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p PixNovel.ipa -O PixNovel.ipa --clobber
+          unzip -p PixNovel.ipa 'Payload/PixNovel.app/Info.plist' > Info.plist
+          python3 - <<'EOF' >> "$GITHUB_ENV"
+          import plistlib
+          p = plistlib.load(open("Info.plist", "rb"))
+          print(f"VERSION={p['CFBundleShortVersionString']}")
+          print(f"BUILD={p['CFBundleVersion']}")
+          EOF
 
       - name: Prepare site
         env:
-          VERSION: ${{ steps.meta.outputs.version }}
-          BUILD: ${{ github.run_number }}
           SHA: ${{ github.sha }}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.event.repository.name }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           mkdir -p site
-          cp -R docs/* site/
+          cp -R docs/. site/
           cp PixNovel.ipa site/PixNovel.ipa
           python3 scripts/make_site_meta.py site PixNovel.ipa
 
@@ -73,28 +151,5 @@ jobs:
         with:
           path: site
 
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PixNovel-${{ steps.meta.outputs.version }}-${{ github.run_number }}
-          path: PixNovel.ipa
-
-      - name: GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.meta.outputs.version }}-build${{ github.run_number }}
-          name: PixNovel ${{ steps.meta.outputs.version }} (build ${{ github.run_number }})
-          body: |
-            未签名 IPA，可用全能签 / LCSign / TrollStore 等工具签名安装。
-            分发页：https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-          files: PixNovel.ipa
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
