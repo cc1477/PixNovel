@@ -18,6 +18,14 @@ enum PixivError: LocalizedError {
     static func message(from body: String) -> String? {
         guard let data = body.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        // OAuth: {"has_error":true,"errors":{"system":{"message":"...","code":918}},"error":"invalid_request"}
+        if let errs = obj["errors"] as? [String: Any], let sys = errs["system"] as? [String: Any] {
+            let msg = sys["message"] as? String ?? ""
+            let code = sys["code"].map { "\($0)" } ?? ""
+            let kind = obj["error"] as? String ?? ""
+            return [msg, kind.isEmpty ? nil : kind, code.isEmpty ? nil : "code \(code)"]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        }
         if let e = obj["error"] as? [String: Any] {
             if let m = e["message"] as? String, !m.isEmpty { return m }
             if let m = e["user_message"] as? String, !m.isEmpty { return m }

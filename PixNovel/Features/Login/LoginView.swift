@@ -114,33 +114,57 @@ struct PixivLoginWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         let onCode: (String) -> Void
         private var done = false
+        /// callback 页面上的 code，仅作兜底：正常情况下 callback 会再跳转到 pixiv://account/login?code=...
+        private var callbackCode: String?
+
         init(onCode: @escaping (String) -> Void) { self.onCode = onCode }
 
-        private func code(in url: URL) -> String? {
-            guard url.scheme == "pixiv" || url.absoluteString.hasPrefix(PixivConst.redirectURI) else { return nil }
-            return URLComponents(url: url, resolvingAgainstBaseURL: false)?
+        private func codeParam(_ url: URL) -> String? {
+            URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first { $0.name == "code" }?.value
+        }
+
+        private func finish(_ code: String) {
+            guard !done else { return }
+            done = true
+            onCode(code)
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url, let c = code(in: url) {
+            guard let url = navigationAction.request.url else { decisionHandler(.allow); return }
+            if url.scheme == "pixiv" {
                 decisionHandler(.cancel)
-                if !done { done = true; onCode(c) }
+                if let c = codeParam(url) { finish(c) }
                 return
             }
-            if let url = navigationAction.request.url, url.scheme == "pixiv" {
-                decisionHandler(.cancel); return
+            if url.absoluteString.hasPrefix(PixivConst.redirectURI), let c = codeParam(url) {
+                callbackCode = c
             }
             decisionHandler(.allow)
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            // 自定义 scheme 跳转失败时，从失败的 URL 中提取 code
+            // 跳转到自定义 scheme 失败时，从失败的 URL 中取 code
             let nsError = error as NSError
             if let s = nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String,
-               let url = URL(string: s), let c = code(in: url), !done {
-                done = true; onCode(c)
+               let url = URL(string: s), url.scheme == "pixiv", let c = codeParam(url) {
+                finish(c)
+                return
+            }
+            fallbackToCallback(after: 1.5)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            if let u = webView.url, u.absoluteString.hasPrefix(PixivConst.redirectURI) {
+                fallbackToCallback(after: 2.0)
+            }
+        }
+
+        private func fallbackToCallback(after delay: Double) {
+            guard let c = callbackCode else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.finish(c)
             }
         }
     }
