@@ -58,9 +58,9 @@ struct LoginView: View {
             }
             .sheet(isPresented: $showWeb) {
                 NavigationStack {
-                    PixivLoginWebView(url: pkce.loginURL) { code in
+                    PixivLoginWebView(url: pkce.loginURL) { code, source in
                         showWeb = false
-                        Task { await exchange(code) }
+                        Task { await exchange(code, source: source) }
                     }
                     .ignoresSafeArea(edges: .bottom)
                     .navigationTitle("登录 Pixiv")
@@ -73,7 +73,7 @@ struct LoginView: View {
         }
     }
 
-    private func exchange(_ code: String) async {
+    private func exchange(_ code: String, source: String) async {
         busy = true; error = nil
         defer { busy = false }
         do {
@@ -81,6 +81,7 @@ struct LoginView: View {
             await session.login(acc)
         } catch {
             self.error = error.localizedDescription
+                + "\n[诊断] code 来源：\(source)，长度 \(code.count)，verifier 长度 \(pkce.verifier.count)"
         }
     }
 
@@ -95,7 +96,7 @@ struct LoginView: View {
 /// 拦截 pixiv://account/login?code=... 回调
 struct PixivLoginWebView: UIViewRepresentable {
     let url: URL
-    let onCode: (String) -> Void
+    let onCode: (String, String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onCode: onCode) }
 
@@ -104,7 +105,7 @@ struct PixivLoginWebView: UIViewRepresentable {
         config.websiteDataStore = .nonPersistent()
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
-        web.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+        web.customUserAgent = PixivConst.webLoginUserAgent
         web.load(URLRequest(url: url))
         return web
     }
@@ -112,22 +113,22 @@ struct PixivLoginWebView: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        let onCode: (String) -> Void
+        let onCode: (String, String) -> Void
         private var done = false
         /// callback 页面上的 code，仅作兜底：正常情况下 callback 会再跳转到 pixiv://account/login?code=...
         private var callbackCode: String?
 
-        init(onCode: @escaping (String) -> Void) { self.onCode = onCode }
+        init(onCode: @escaping (String, String) -> Void) { self.onCode = onCode }
 
         private func codeParam(_ url: URL) -> String? {
             URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first { $0.name == "code" }?.value
         }
 
-        private func finish(_ code: String) {
+        private func finish(_ code: String, _ source: String) {
             guard !done else { return }
             done = true
-            onCode(code)
+            onCode(code, source)
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
@@ -135,7 +136,7 @@ struct PixivLoginWebView: UIViewRepresentable {
             guard let url = navigationAction.request.url else { decisionHandler(.allow); return }
             if url.scheme == "pixiv" {
                 decisionHandler(.cancel)
-                if let c = codeParam(url) { finish(c) }
+                if let c = codeParam(url) { finish(c, "pixiv://") }
                 return
             }
             if url.absoluteString.hasPrefix(PixivConst.redirectURI), let c = codeParam(url) {
@@ -149,7 +150,7 @@ struct PixivLoginWebView: UIViewRepresentable {
             let nsError = error as NSError
             if let s = nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String,
                let url = URL(string: s), url.scheme == "pixiv", let c = codeParam(url) {
-                finish(c)
+                finish(c, "pixiv://(失败回调)")
                 return
             }
             fallbackToCallback(after: 1.5)
@@ -164,7 +165,7 @@ struct PixivLoginWebView: UIViewRepresentable {
         private func fallbackToCallback(after delay: Double) {
             guard let c = callbackCode else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.finish(c)
+                self?.finish(c, "callback")
             }
         }
     }

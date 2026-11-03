@@ -13,6 +13,10 @@ enum PixivConst {
     static let oauthURL = URL(string: "https://oauth.secure.pixiv.net/auth/token")!
     static let redirectURI = "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback"
     static let loginBase = "https://app-api.pixiv.net/web/v1/login"
+    /// OAuth 换 token 使用 Android App 的 UA（与 client=pixiv-android 保持一致）
+    static let oauthUserAgent = "PixivAndroidApp/5.0.234 (Android 11; Pixel 5)"
+    /// 网页登录使用桌面浏览器 UA，避免被识别为其他客户端
+    static let webLoginUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 }
 
 // MARK: - PKCE
@@ -22,7 +26,7 @@ struct PKCE {
     let challenge: String
 
     init() {
-        var bytes = [UInt8](repeating: 0, count: 32)
+        var bytes = [UInt8](repeating: 0, count: 64)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         verifier = Data(bytes).base64URL
         challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URL
@@ -97,7 +101,8 @@ enum PixivAuth {
         req.httpMethod = "POST"
         req.httpBody = FormEncoder.encode(form).data(using: .utf8)
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        PixivHeaders.apply(to: &req)
+        req.setValue(PixivConst.oauthUserAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else {
