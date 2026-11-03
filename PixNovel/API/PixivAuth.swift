@@ -26,9 +26,11 @@ struct PKCE {
     let challenge: String
 
     init() {
-        var bytes = [UInt8](repeating: 0, count: 64)
+        // 与 PixEz 一致：128 位 unreserved 字符
+        let charset = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        var bytes = [UInt8](repeating: 0, count: 128)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        verifier = Data(bytes).base64URL
+        verifier = String(bytes.map { charset[Int($0) % charset.count] })
         challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URL
     }
 
@@ -101,8 +103,12 @@ enum PixivAuth {
         req.httpMethod = "POST"
         req.httpBody = FormEncoder.encode(form).data(using: .utf8)
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        PixivHeaders.apply(to: &req)
+        // 与 PixEz 一致：OAuth 使用 Android 客户端标识
         req.setValue(PixivConst.oauthUserAgent, forHTTPHeaderField: "User-Agent")
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("Android", forHTTPHeaderField: "App-OS")
+        req.setValue("Android 11", forHTTPHeaderField: "App-OS-Version")
+        req.setValue("5.0.234", forHTTPHeaderField: "App-Version")
         let (data, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else {

@@ -102,10 +102,8 @@ struct PixivLoginWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = .nonPersistent()
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
-        web.customUserAgent = PixivConst.webLoginUserAgent
         web.load(URLRequest(url: url))
         return web
     }
