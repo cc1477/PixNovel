@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PixNovel 下载</title>
+<meta name="description" content="PixNovel — Pixiv 第三方 iOS 小说阅读客户端，支持全能签、LCSign 一键安装">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<meta name="theme-color" content="#0096fa">
+<style>
+  :root {
+    --bg: #f4f6fa; --card: #ffffff; --text: #1d2330; --muted: #6b7385; --line: #e4e8f0;
+    --brand: #0096fa; --brand2: #4f5dff; --ok: #12b76a; --warn: #f79009;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0e1116; --card: #171b22; --text: #e8ebf1; --muted: #8b93a5; --line: #262c36; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif; }
+  body { padding: env(safe-area-inset-top) 16px calc(32px + env(safe-area-inset-bottom)); }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  header { text-align: center; padding: 36px 0 20px; }
+  header img { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 8px 24px rgba(0,150,250,.3); }
+  h1 { margin: 16px 0 4px; font-size: 28px; }
+  .sub { color: var(--muted); margin: 0; }
+  .meta { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 16px; }
+  .card h2 { font-size: 16px; margin: 0 0 12px; }
+  .btn { display: flex; align-items: center; gap: 12px; width: 100%; text-decoration: none; color: inherit;
+    padding: 14px; border-radius: 12px; border: 1px solid var(--line); margin-top: 10px; cursor: pointer; background: transparent; font: inherit; text-align: left; }
+  .btn:active { transform: scale(.985); }
+  .btn .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: #fff; font-weight: 700; flex: none; font-size: 15px; }
+  .btn .t { flex: 1; min-width: 0; }
+  .btn .t b { display: block; font-size: 16px; }
+  .btn .t span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .btn .arrow { color: var(--muted); }
+  .primary { background: linear-gradient(135deg, var(--brand), var(--brand2)); border: none; color: #fff; }
+  .primary .t span, .primary .arrow { color: rgba(255,255,255,.85); }
+  .primary .ic { background: rgba(255,255,255,.2); }
+  .nsk { background: linear-gradient(135deg, #667eea, #764ba2); }
+  .lc  { background: linear-gradient(135deg, #1f2937, #4b5563); }
+  .dl  { background: var(--ok); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row2 .btn { margin-top: 0; padding: 12px; }
+  .row2 .btn .ic { width: 32px; height: 32px; font-size: 13px; }
+  .row2 .btn .t b { font-size: 14px; }
+  ul.feat { margin: 0; padding-left: 20px; line-height: 1.9; }
+  ul.feat li::marker { color: var(--brand); }
+  .note { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .warn { border-left: 3px solid var(--warn); padding-left: 10px; }
+  .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(120px);
+    background: rgba(20,24,32,.92); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; transition: transform .25s; max-width: calc(100% - 32px); }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  code { font-size: 12px; word-break: break-all; background: var(--bg); padding: 2px 6px; border-radius: 6px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.8; }
+  footer a { color: var(--brand); }
+  @media (max-width: 380px) { .row2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="icon.png" alt="PixNovel 图标">
+    <h1>PixNovel</h1>
+    <p class="sub">Pixiv 第三方 iOS 小说阅读客户端</p>
+    <div class="meta">
+      <span class="chip" id="m-version">版本 加载中…</span>
+      <span class="chip" id="m-size">大小 -</span>
+      <span class="chip" id="m-date">更新 -</span>
+      <span class="chip">iOS 16+</span>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>一键安装</h2>
+    <a class="btn primary" id="btn-nsk" href="#">
+      <div class="ic">全</div>
+      <div class="t"><b>全能签安装</b><span>唤起全能签下载并签名安装</span></div>
+      <div class="arrow">›</div>
+    </a>
+    <a class="btn" id="btn-lc" href="#">
+      <div class="ic lc">LC</div>
+      <div class="t"><b>LCSign 安装</b><span>唤起 LCSign 导入 IPA</span></div>
+      <div class="arrow">›</div>
+    </a>
+    <a class="btn" id="btn-dl" href="PixNovel.ipa" download>
+      <div class="ic dl">↓</div>
+      <div class="t"><b>下载 IPA</b><span>未签名，适用于 TrollStore / 爱思 / Sideloadly 等</span></div>
+      <div class="arrow">›</div>
+    </a>
+  </section>
+
+  <section class="card">
+    <h2>添加软件源（自动获取更新）</h2>
+    <div class="row2">
+      <a class="btn" id="src-nsk" href="#">
+        <div class="ic nsk">全</div>
+        <div class="t"><b>全能签源</b></div>
+      </a>
+      <a class="btn" id="src-lc" href="#">
+        <div class="ic lc">LC</div>
+        <div class="t"><b>LCSign 源</b></div>
+      </a>
+    </div>
+    <p class="note" style="margin:12px 0 0">源地址：<code id="src-url">-</code>
+      <button class="chip" id="copy-src" style="cursor:pointer">复制</button></p>
+  </section>
+
+  <section class="card">
+    <h2>功能</h2>
+    <ul class="feat">
+      <li><b>热度排序</b>：非会员也能用 —— 热门预览 + users入り 标签 + 多页扫描，本地按收藏数 / 收藏率 / 日均收藏 / 综合热度排序</li>
+      <li>会员自动使用官方 popular_desc，并支持二次排序</li>
+      <li>日榜 / 周榜 / 男女性向 / 新人榜，支持历史日期与榜单重排</li>
+      <li>系列目录、上一话 / 下一话、阅读进度自动保存</li>
+      <li>多种阅读主题、字体、字号、行距，连续滚动或按原文分页</li>
+      <li>收藏、关注、标签屏蔽、R-18 开关、图片反代</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>安装说明</h2>
+    <p class="note">1. 先安装 <b>全能签</b> 或 <b>LCSign</b>，并导入你自己的证书。<br>
+      2. 用 Safari 打开本页，点击对应的安装按钮，在弹窗中选择「打开」。<br>
+      3. 在签名工具中完成签名后安装。</p>
+    <p class="note warn" id="env-tip">请在 iPhone / iPad 的 Safari 中打开本页，唤起签名工具需要在设备上操作。</p>
+  </section>
+
+  <footer>
+    <div id="m-notes"></div>
+    <div>PixNovel 为开源第三方客户端，与 pixiv Inc. 无关</div>
+    <div><a id="repo-link" href="#">GitHub 仓库</a> · <a id="release-link" href="#">历史版本</a></div>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  // 签名工具的唤起格式
+  //   全能签：nsk-sign://web?url=<IPA 地址>        添加源：nsk-sign://addsource?url=<源地址>
+  //   LCSign：loadcontroller://import?url=<IPA 地址>  添加源：loadcontroller://addsource?url=<源地址>
+  var base = location.href.replace(/[#?].*$/, '').replace(/index\.html$/, '');
+  if (!/\/$/.test(base)) base += '/';
+  var ipa = base + 'PixNovel.ipa';
+  var source = base + 'source.json';
+
+  function $(id) { return document.getElementById(id); }
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+  function setLinks() {
+    $('btn-nsk').href = 'nsk-sign://web?url=' + ipa;
+    $('btn-lc').href = 'loadcontroller://import?url=' + ipa;
+    $('btn-dl').href = ipa;
+    $('src-nsk').href = 'nsk-sign://addsource?url=' + source;
+    $('src-lc').href = 'loadcontroller://addsource?url=' + source;
+    $('src-url').textContent = source;
+  }
+  setLinks();
+
+  // 唤起失败提示（App 未安装时页面不会离开）
+  ['btn-nsk', 'btn-lc', 'src-nsk', 'src-lc'].forEach(function (id) {
+    $(id).addEventListener('click', function () {
+      var name = id.indexOf('nsk') >= 0 ? '全能签' : 'LCSign';
+      var start = Date.now();
+      setTimeout(function () {
+        if (!document.hidden && Date.now() - start < 2500) toast('如未自动跳转，请确认已安装 ' + name);
+      }, 1800);
+    });
+  });
+
+  $('copy-src').addEventListener('click', function () {
+    var done = function () { toast('已复制源地址'); };
+    if (navigator.clipboard) navigator.clipboard.writeText(source).then(done, function () { toast(source); });
+    else toast(source);
+  });
+
+  var isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isiOS) $('env-tip').style.display = 'none';
+
+  // GitHub 仓库链接
+  var m = location.hostname.match(/^([^.]+)\.github\.io$/);
+  var repo = location.pathname.split('/').filter(Boolean)[0];
+  if (m && repo) {
+    var gh = 'https://github.com/' + m[1] + '/' + repo;
+    $('repo-link').href = gh; $('release-link').href = gh + '/releases';
+  }
+
+  function fmtSize(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(0) + ' KB'; }
+  fetch('version.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (v) {
+    $('m-version').textContent = '版本 ' + v.version + ' (' + v.build + ')';
+    $('m-size').textContent = '大小 ' + fmtSize(v.size);
+    $('m-date').textContent = '更新 ' + v.date;
+    if (v.notes) $('m-notes').textContent = '本次更新：' + v.notes;
+  }).catch(function () { $('m-version').textContent = '版本 -'; });
+})();
+</script>
+</body>
+</html>
