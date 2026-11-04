@@ -39,7 +39,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           APP=false
-          if [ "$FORCE" = "true" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$FORCE" != "true" ]; then
+            APP=false   # 例如榜单数据更新后的重新部署
+          elif [ "$FORCE" = "true" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             APP=true
           elif git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE '^(PixNovel/|project\.yml|\.github/workflows/build\.yml)'; then
@@ -147,6 +149,15 @@ jobs:
           cp -R docs/. site/
           cp PixNovel.ipa site/PixNovel.ipa
           python3 scripts/make_site_meta.py site PixNovel.ipa
+
+      - name: Add rank data
+        run: |
+          if git ls-remote --exit-code --heads origin rank-data >/dev/null; then
+            git clone -q --depth 1 -b rank-data "https://github.com/${{ github.repository }}.git" rankdata
+            [ -d rankdata/rank ] && cp -R rankdata/rank site/rank && ls site/rank
+          else
+            echo "暂无榜单数据（rank-data 分支不存在）"
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:

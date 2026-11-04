@@ -63,7 +63,12 @@ struct SettingsView: View {
                     Text("i.pixiv.cat").tag("i.pixiv.cat")
                 }
                 Button("清除图片缓存") { ImageLoader.shared.clear() }
-            } header: { Text("网络") }
+                TextField("榜单数据地址", text: $settings.rankDataBase)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .font(.footnote.monospaced())
+            } header: { Text("网络") } footer: {
+                Text("月榜 / 年榜 / 长篇榜读取 GitHub Actions 每日抓取的数据；留空则改为合并历史周榜。")
+            }
 
             Section("阅读") {
                 NavigationLink("阅读器设置") { ReaderSettingsSheet() }

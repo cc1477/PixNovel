@@ -1,0 +1,61 @@
+name: Crawl Rankings
+
+on:
+  schedule:
+    # 每天 UTC 04:23（北京时间 12:23），Pixiv 前一日榜单已发布
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "抓取最近 N 天的日榜（首次可填 60 补历史）"
+        default: "2"
+      weeks:
+        description: "抓取最近 N 周的周榜（首次可填 52 补历史）"
+        default: "1"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout data branch
+        run: |
+          if git ls-remote --exit-code --heads origin rank-data >/dev/null; then
+            git clone --depth 1 -b rank-data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+          else
+            mkdir data && cd data && git init -q -b rank-data
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          fi
+
+      - name: Crawl
+        env:
+          PIXIV_REFRESH_TOKEN: ${{ secrets.PIXIV_REFRESH_TOKEN }}
+        run: python3 scripts/crawl_rankings.py data --days "${{ inputs.days || '2' }}" --weeks "${{ inputs.weeks || '1' }}"
+
+      - name: Commit data
+        id: commit
+        run: |
+          cd data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git commit -q -m "rank data $(date -u +%F)"
+          git push -q origin rank-data
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Redeploy Pages (no app rebuild)
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --repo "${{ github.repository }}" -f force_build=false

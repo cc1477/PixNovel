@@ -74,6 +74,8 @@ final class AppSettings: ObservableObject {
     @Published var hotGravity: Double { didSet { d.set(hotGravity, forKey: "hotGravity") } }
     @Published var preferServerPopular: Bool { didSet { d.set(preferServerPopular, forKey: "preferServerPopular") } }
     @Published var mutedTags: [String] { didSet { d.set(mutedTags, forKey: "mutedTags") } }
+    /// 每日抓取榜单数据地址（GitHub Pages）
+    @Published var rankDataBase: String { didSet { d.set(rankDataBase, forKey: "rankDataBase") } }
 
     @Published var fontSize: Double { didSet { d.set(fontSize, forKey: "r.fontSize") } }
     @Published var lineSpacing: Double { didSet { d.set(lineSpacing, forKey: "r.lineSpacing") } }
@@ -89,7 +91,7 @@ final class AppSettings: ObservableObject {
     private init() {
         d.register(defaults: [
             "chineseOnly": true, "r18Mode": R18Mode.all.rawValue, "imageProxy": "", "defaultMetric": HotMetric.bookmarks.rawValue,
-            "scanDepth": 10, "hotGravity": 0.6, "preferServerPopular": true, "mutedTags": [String](),
+            "scanDepth": 10, "hotGravity": 0.6, "preferServerPopular": true, "mutedTags": [String](), "rankDataBase": "https://cc1477.github.io/PixNovel/rank/",
             "r.fontSize": 18.0, "r.lineSpacing": 8.0, "r.paragraphSpacing": 14.0, "r.padding": 20.0,
             "r.theme": ReaderTheme.light.rawValue, "r.font": ReaderFont.system.rawValue,
             "r.layout": ReaderLayout.scroll.rawValue, "r.keepAwake": true, "r.indent": true, "r.collapseBlank": true
@@ -102,6 +104,7 @@ final class AppSettings: ObservableObject {
         hotGravity = d.double(forKey: "hotGravity")
         preferServerPopular = d.bool(forKey: "preferServerPopular")
         mutedTags = d.stringArray(forKey: "mutedTags") ?? []
+        rankDataBase = d.string(forKey: "rankDataBase") ?? ""
         fontSize = d.double(forKey: "r.fontSize")
         lineSpacing = d.double(forKey: "r.lineSpacing")
         paragraphSpacing = d.double(forKey: "r.paragraphSpacing")

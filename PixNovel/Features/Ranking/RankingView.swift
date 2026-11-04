@@ -18,7 +18,7 @@ enum RankPeriod: String, CaseIterable, Identifiable {
 
 /// 榜单分类（二级菜单）
 enum RankCategory: String, CaseIterable, Identifiable {
-    case general, male, female, rookie, ai
+    case general, male, female, rookie, ai, long
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -27,6 +27,7 @@ enum RankCategory: String, CaseIterable, Identifiable {
         case .female: return "女性向"
         case .rookie: return "新人"
         case .ai: return "AI 作品"
+        case .long: return "长篇（5万字以上）"
         }
     }
     var icon: String {
@@ -36,13 +37,14 @@ enum RankCategory: String, CaseIterable, Identifiable {
         case .female: return "person.fill"
         case .rookie: return "leaf"
         case .ai: return "cpu"
+        case .long: return "books.vertical"
         }
     }
     static func available(for p: RankPeriod) -> [RankCategory] {
         switch p {
         case .day: return [.general, .male, .female, .rookie, .ai]
         case .week: return [.general, .rookie]
-        case .month, .year: return [.general]
+        case .month, .year: return [.general, .long]
         }
     }
 
@@ -69,6 +71,9 @@ final class RankingModel: ObservableObject {
     @Published var localSort: HotMetric? { didSet { apply() } }
     @Published private(set) var note: String?
     @Published private(set) var synthesized = false
+    /// 月榜 / 年榜的数据来源说明
+    @Published private(set) var source: String?
+    private var category: RankCategory = .general
 
     /// 小说 id -> 官方名次（合成榜单为空）
     private(set) var ranks: [Int: Int] = [:]
@@ -89,6 +94,8 @@ final class RankingModel: ObservableObject {
         task?.cancel()
         raw = [:]; order = []; ranks = [:]; items = []; loadedCount = 0; progress = 0; error = nil; note = nil
         synthesized = period.isSynthesized
+        source = nil
+        self.category = category
         let (normal, r18Mode) = category.modes(period)
         var modes: [RankingMode] = []
         switch r18 {
@@ -112,7 +119,17 @@ final class RankingModel: ObservableObject {
         }
         loading = true
         let total = Double(jobs.count)
-        task = Task {
+        task = Task { [self] in
+            // 月榜 / 年榜：优先读取每日抓取积累的数据
+            if period.isSynthesized, let remote = await RemoteRank.fetch(period: period, anchor: date ?? Date(), force: force) {
+                for n in remote.novels where raw[n.id] == nil { order.append(n.id); raw[n.id] = n }
+                loadedCount = raw.count
+                source = remote.note
+                apply()
+                progress = 1
+                loading = false
+                return
+            }
             // 逐个加载（全局限速器控制节奏），每页到达即刷新列表
             var done = 0.0
             for j in jobs {
@@ -151,7 +168,8 @@ final class RankingModel: ObservableObject {
     func apply() {
         let s = AppSettings.shared
         let f = s.contentFilter
-        let visible = order.compactMap { raw[$0] }.filter(f.accept)
+        var visible = order.compactMap { raw[$0] }.filter(f.accept)
+        if category == .long { visible = visible.filter { $0.length >= 50000 } }
         if let m = localSort {
             items = HotRanker.sort(visible, by: m, gravity: s.hotGravity)
         } else if synthesized {
@@ -260,6 +278,11 @@ struct RankingView: View {
             Text(settings.chineseOnly ? "榜单中没有识别到中文作品\n可在右上角筛选中关闭「仅中文」" : "暂无内容")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 24)
+        } else if let src = model.source {
+            Text(src)
+                .font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .listRowSeparator(.hidden)
         } else if model.synthesized {
             Text(period == .month ? "月榜由最近 4 期周榜合并，按收藏数排序" : "年榜由最近 52 期周榜前 30 名合并，按收藏数排序（已缓存，再次打开无需等待）")
                 .font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
@@ -310,6 +333,46 @@ struct RankingView: View {
             model.load(period: period, category: category, date: useDate ? date : nil, r18: settings.r18Mode, force: true)
         } else {
             model.loadIfNeeded(key: loadKey, period: period, category: category, date: useDate ? date : nil, r18: settings.r18Mode)
+        }
+    }
+}
+
+
+/// 读取 GitHub Actions 每日抓取生成的榜单（发布在 GitHub Pages /rank/ 下）
+enum RemoteRank {
+    struct Result { let novels: [Novel]; let note: String }
+
+    private struct File: Decodable {
+        var novels: [Novel]
+        var days: Int?
+    }
+
+    static func fetch(period: RankPeriod, anchor: Date, force: Bool) async -> Result? {
+        let base = AppSettings.shared.rankDataBase.trimmingCharacters(in: .whitespaces)
+        guard !base.isEmpty else { return nil }
+        let cal = Calendar.current
+        let y = cal.component(.year, from: anchor), m = cal.component(.month, from: anchor)
+        let path = period == .month ? String(format: "month/%04d-%02d.json", y, m) : String(format: "year/%04d.json", y)
+        guard let url = URL(string: base.hasSuffix("/") ? base + path : base + "/" + path) else { return nil }
+        let now = Date()
+        let isPast = period == .month
+            ? (cal.component(.year, from: now) * 12 + cal.component(.month, from: now)) > (y * 12 + m)
+            : cal.component(.year, from: now) > y
+        do {
+            let data = try await ResponseCache.shared.data(for: url, permanent: isPast, force: force) {
+                let (d, r) = try await URLSession.shared.data(from: url)
+                guard (r as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.fileDoesNotExist) }
+                return d
+            }
+            let dec = JSONDecoder()
+            dec.keyDecodingStrategy = .convertFromSnakeCase
+            let f = try dec.decode(File.self, from: data)
+            guard !f.novels.isEmpty else { return nil }
+            let label = period == .month ? String(format: "%04d 年 %d 月", y, m) : "\(y) 年"
+            let days = f.days.map { "，已积累 \($0) 天榜单" } ?? ""
+            return Result(novels: f.novels, note: "\(label)：每日抓取的全部上榜作品\(days)，按收藏数排序")
+        } catch {
+            return nil
         }
     }
 }
