@@ -47,7 +47,7 @@ enum PixivError: LocalizedError {
 enum RankingMode: String, CaseIterable, Identifiable {
     case day, week, male = "day_male", female = "day_female", rookie = "week_rookie"
     case dayR18 = "day_r18", weekR18 = "week_r18", maleR18 = "day_male_r18", femaleR18 = "day_female_r18"
-    case dayAI = "day_ai"
+    case dayAI = "day_ai", dayR18AI = "day_r18_ai"
 
     var id: String { rawValue }
     var title: String {
@@ -58,6 +58,7 @@ enum RankingMode: String, CaseIterable, Identifiable {
         case .female: return "女性向"
         case .rookie: return "新人"
         case .dayAI: return "AI 日榜"
+        case .dayR18AI: return "R18 AI 日榜"
         case .dayR18: return "R18 日榜"
         case .weekR18: return "R18 周榜"
         case .maleR18: return "R18 男性向"

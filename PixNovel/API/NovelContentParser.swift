@@ -6,6 +6,10 @@ enum ReaderBlock: Hashable {
     case paragraph(String)
     case image(String)      // url
     case missingImage(String)
+    /// 原文中的连续空行（数量）
+    case blank(Int)
+    /// 场景分隔符，如 ＊＊＊、◇◇◇
+    case divider(String)
 }
 
 struct ReaderPage: Identifiable, Hashable {
@@ -104,16 +108,15 @@ enum NovelContentParser {
         var cursor = 0
         func flush(_ s: String) {
             let inline = inlineMarkup(s)
-            // 按行拆段，保留空行营造段落间距
-            var buffer: [String] = []
-            for line in inline.components(separatedBy: "\n") {
-                if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                    if !buffer.isEmpty { blocks.append(.paragraph(buffer.joined(separator: "\n"))); buffer.removeAll() }
-                } else {
-                    buffer.append(line)
-                }
+            var blankRun = 0
+            for raw in inline.components(separatedBy: "\n") {
+                // 去掉行首行尾的半角 / 全角空格，缩进由阅读器统一处理
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if line.isEmpty { blankRun += 1; continue }
+                if blankRun > 0 && !blocks.isEmpty { blocks.append(.blank(blankRun)) }
+                blankRun = 0
+                blocks.append(isDivider(line) ? .divider(line) : .paragraph(line))
             }
-            if !buffer.isEmpty { blocks.append(.paragraph(buffer.joined(separator: "\n"))) }
         }
         for m in tokenRegex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             if m.range.location > cursor {
@@ -137,6 +140,11 @@ enum NovelContentParser {
         }
         if cursor < ns.length { flush(ns.substring(from: cursor)) }
         return blocks
+    }
+
+    /// 只由符号组成的短行视为场景分隔
+    static func isDivider(_ line: String) -> Bool {
+        line.count <= 16 && line.allSatisfy { !$0.isLetter && !$0.isNumber && !"「」『』（）()…!?！？。、，".contains($0) }
     }
 
     private static let rubyRegex = try! NSRegularExpression(pattern: #"\[\[rb:\s*(.+?)\s*>\s*(.+?)\s*\]\]"#)

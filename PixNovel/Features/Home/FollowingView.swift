@@ -22,22 +22,30 @@ struct FollowingView: View {
                 authorList
             }
         }
-        .safeAreaInset(edge: .top) {
-            VStack(spacing: 8) {
+        .safeAreaInset(edge: .top, spacing: 0) {
+            GlassHeader {
                 Picker("", selection: $tab) {
                     ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                ContentFilterBar(status: tab == .feed ? "\(feed.items.count)/\(feed.rawCount) 篇" : nil)
             }
-            .padding(.horizontal).padding(.bottom, 8)
-            .background(.bar)
         }
         .navigationTitle("关注")
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if tab == .feed { ModelSortMenu(model: feed, defaultTitle: "发布时间") }
+                Menu {
+                    ContentFilterMenuItems()
+                    if tab == .feed {
+                        Section("排序") {
+                            Picker(selection: $feed.localSort) {
+                                Text("发布时间").tag(HotMetric?.none)
+                                ForEach(HotMetric.allCases) { m in Label(m.title, systemImage: m.icon).tag(HotMetric?.some(m)) }
+                            } label: { Label("排序：\(feed.localSort?.title ?? "发布时间")", systemImage: "arrow.up.arrow.down") }
+                        }
+                    }
+                } label: {
+                    Image(systemName: settings.filterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
             }
         }
         .task {

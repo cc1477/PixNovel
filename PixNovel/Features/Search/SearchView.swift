@@ -16,8 +16,8 @@ struct SearchView: View {
 
     var body: some View {
         content
-            .navigationTitle(initialWord ?? "热度搜索")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(initialWord ?? "搜索")
+            .navigationBarTitleDisplayMode(initialWord == nil ? .large : .inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "标签 / 关键词")
             .searchSuggestions {
                 ForEach(suggestions, id: \.name) { t in
@@ -35,8 +35,16 @@ struct SearchView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showFilter = true } label: {
-                        Image(systemName: model.filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    Menu {
+                        ContentFilterMenuItems()
+                        Section {
+                            Button { showFilter = true } label: {
+                                Label("更多过滤与扫描设置…", systemImage: "slider.horizontal.3")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: model.filter.isActive || settings.filterActive
+                              ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                     }
                 }
             }
@@ -177,8 +185,13 @@ struct SearchView: View {
                 .padding(.horizontal)
             }
 
-            ContentFilterBar(status: "\(model.results.count)/\(model.poolCount) 篇")
-                .padding(.horizontal)
+            HStack {
+                Label(settings.filterSummary, systemImage: "line.3.horizontal.decrease")
+                Spacer()
+                Text("\(model.results.count) / \(model.poolCount) 篇").monospacedDigit()
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            .padding(.horizontal)
 
             HStack(spacing: 8) {
                 Menu {

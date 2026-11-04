@@ -55,15 +55,22 @@ final class SessionStore: ObservableObject {
 
 struct RootTabView: View {
     var body: some View {
-        TabView {
-            NavigationStack { RankingView() }
-                .tabItem { Label("热榜", systemImage: "flame") }
-            NavigationStack { FollowingView() }
-                .tabItem { Label("关注", systemImage: "person.2") }
-            NavigationStack { SearchView() }
-                .tabItem { Label("搜索", systemImage: "magnifyingglass") }
-            NavigationStack { LibraryView() }
-                .tabItem { Label("我的", systemImage: "person.crop.circle") }
+        if #available(iOS 18.0, *) {
+            // iOS 26+：悬浮玻璃底栏，搜索为独立的玻璃按钮
+            TabView {
+                Tab("热榜", systemImage: "flame") { NavigationStack { RankingView() } }
+                Tab("关注", systemImage: "person.2") { NavigationStack { FollowingView() } }
+                Tab("我的", systemImage: "person.crop.circle") { NavigationStack { LibraryView() } }
+                Tab("搜索", systemImage: "magnifyingglass", role: .search) { NavigationStack { SearchView() } }
+            }
+            .minimizeTabBarOnScroll()
+        } else {
+            TabView {
+                NavigationStack { RankingView() }.tabItem { Label("热榜", systemImage: "flame") }
+                NavigationStack { FollowingView() }.tabItem { Label("关注", systemImage: "person.2") }
+                NavigationStack { SearchView() }.tabItem { Label("搜索", systemImage: "magnifyingglass") }
+                NavigationStack { LibraryView() }.tabItem { Label("我的", systemImage: "person.crop.circle") }
+            }
         }
     }
 }

@@ -84,6 +84,7 @@ final class AppSettings: ObservableObject {
     @Published var readerLayout: ReaderLayout { didSet { d.set(readerLayout.rawValue, forKey: "r.layout") } }
     @Published var keepAwake: Bool { didSet { d.set(keepAwake, forKey: "r.keepAwake") } }
     @Published var firstLineIndent: Bool { didSet { d.set(firstLineIndent, forKey: "r.indent") } }
+    @Published var collapseBlankLines: Bool { didSet { d.set(collapseBlankLines, forKey: "r.collapseBlank") } }
 
     private init() {
         d.register(defaults: [
@@ -91,7 +92,7 @@ final class AppSettings: ObservableObject {
             "scanDepth": 10, "hotGravity": 0.6, "preferServerPopular": true, "mutedTags": [String](),
             "r.fontSize": 18.0, "r.lineSpacing": 8.0, "r.paragraphSpacing": 14.0, "r.padding": 20.0,
             "r.theme": ReaderTheme.light.rawValue, "r.font": ReaderFont.system.rawValue,
-            "r.layout": ReaderLayout.scroll.rawValue, "r.keepAwake": true, "r.indent": false
+            "r.layout": ReaderLayout.scroll.rawValue, "r.keepAwake": true, "r.indent": true, "r.collapseBlank": true
         ])
         chineseOnly = d.bool(forKey: "chineseOnly")
         r18Mode = R18Mode(rawValue: d.string(forKey: "r18Mode") ?? "") ?? .all
@@ -110,6 +111,7 @@ final class AppSettings: ObservableObject {
         readerLayout = ReaderLayout(rawValue: d.string(forKey: "r.layout") ?? "") ?? .scroll
         keepAwake = d.bool(forKey: "r.keepAwake")
         firstLineIndent = d.bool(forKey: "r.indent")
+        collapseBlankLines = d.bool(forKey: "r.collapseBlank")
     }
 
     var contentFilter: ContentFilter {

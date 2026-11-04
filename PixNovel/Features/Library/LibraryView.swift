@@ -21,16 +21,15 @@ struct LibraryView: View {
             case .privateBM: NovelListContent(model: privateModel)
             }
         }
-        .safeAreaInset(edge: .top) {
-            Picker("", selection: $tab) {
-                ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            GlassHeader {
+                Picker("", selection: $tab) {
+                    ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal).padding(.bottom, 6)
-            .background(.bar)
         }
         .navigationTitle("我的")
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }

@@ -54,13 +54,14 @@ jobs:
   build:
     needs: changes
     if: needs.changes.outputs.app == 'true'
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
         run: |
-          XC=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          # 使用最新 Xcode（iOS 26+ SDK，支持 Liquid Glass）
+          XC=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | grep -v beta | sort -V | tail -1)
           [ -n "$XC" ] && sudo xcode-select -s "$XC"
           xcodebuild -version
 
