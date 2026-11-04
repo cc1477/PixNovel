@@ -8,56 +8,55 @@ struct LibraryView: View {
     @State private var confirmLogout = false
 
     var body: some View {
-        List {
-            Section {
+        ScrollView {
+            VStack(spacing: 22) {
                 profileHeader
-                    .listRowInsets(EdgeInsets())
-            }
-            .listSectionSeparator(.hidden)
 
-            if let last = library.history.first {
-                Section {
-                    continueCard(last)
-                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                } header: { Text("继续阅读") }
-            }
+                if let last = library.history.first {
+                    group("继续阅读") { continueCard(last) }
+                }
 
-            Section {
-                NavigationLink { BookmarksView() } label: {
-                    MenuRow(icon: "heart.fill", color: .pink, title: "收藏")
+                group(nil) {
+                    NavigationLink { BookmarksView() } label: {
+                        MenuRow(icon: "heart.fill", color: .pink, title: "收藏")
+                    }
+                    divider
+                    NavigationLink { HistoryView() } label: {
+                        MenuRow(icon: "clock.fill", color: .blue, title: "浏览记录",
+                                detail: library.history.isEmpty ? nil : "\(library.history.count)")
+                    }
                 }
-                NavigationLink { HistoryView() } label: {
-                    MenuRow(icon: "clock.fill", color: .blue, title: "浏览记录", detail: library.history.isEmpty ? nil : "\(library.history.count)")
-                }
-            }
 
-            Section("关联") {
-                NavigationLink { FollowingAuthorsList(model: authors) } label: {
-                    MenuRow(icon: "person.2.fill", color: .teal, title: "关注的作者")
+                group("关联") {
+                    NavigationLink { FollowingAuthorsList(model: authors) } label: {
+                        MenuRow(icon: "person.2.fill", color: .teal, title: "关注的作者",
+                                detail: authors.users.isEmpty ? nil : "\(authors.users.count)")
+                    }
+                    if let uid = session.account?.userId, let id = Int(uid) {
+                        divider
+                        NavigationLink(value: Route.user(id)) {
+                            MenuRow(icon: "person.text.rectangle.fill", color: .indigo, title: "我的作品")
+                        }
+                    }
                 }
-                if let uid = session.account?.userId, let id = Int(uid) {
-                    NavigationLink(value: Route.user(id)) {
-                        MenuRow(icon: "person.text.rectangle.fill", color: .indigo, title: "我的作品")
+
+                group("其他") {
+                    NavigationLink { SettingsView() } label: {
+                        MenuRow(icon: "gearshape.fill", color: .gray, title: "设置")
+                    }
+                    divider
+                    Button { confirmLogout = true } label: {
+                        MenuRow(icon: "rectangle.portrait.and.arrow.right", color: .red, title: "退出登录", chevron: false)
                     }
                 }
             }
-
-            Section("其他") {
-                NavigationLink { SettingsView() } label: {
-                    MenuRow(icon: "gearshape.fill", color: .gray, title: "设置")
-                }
-                Button { confirmLogout = true } label: {
-                    MenuRow(icon: "rectangle.portrait.and.arrow.right", color: .red, title: "退出登录")
-                }
-                .foregroundStyle(.primary)
-            }
+            .padding(.bottom, 100)
         }
-        .listStyle(.insetGrouped)
-        .tint(.purple)
-        .navigationTitle("我的")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .navigationBar)
+        .background(Color(.systemGroupedBackground))
         .ignoresSafeArea(edges: .top)
+        .buttonStyle(.plain)
+        .tint(.purple)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             if authors.users.isEmpty, let uid = session.account?.userId { await authors.refresh(userId: uid) }
         }
@@ -67,57 +66,81 @@ struct LibraryView: View {
         .pixivDestinations()
     }
 
-    // MARK: 头部
+    private var divider: some View {
+        Divider().padding(.leading, 60)
+    }
+
+    /// 手动实现的分组卡片
+    private func group<Content: View>(_ title: String?, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let title {
+                Text(title).font(.footnote.weight(.medium)).foregroundStyle(.secondary).padding(.leading, 20)
+            }
+            VStack(spacing: 0) { content() }
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: 头部（通栏，延伸到状态栏）
 
     private var profileHeader: some View {
         let acc = session.account
-        return ZStack(alignment: .bottomLeading) {
-            // 模糊头像做背景
-            GeometryReader { geo in
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
                 PximgImage(url: acc?.avatar)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .blur(radius: 30)
-                    .overlay(Color.black.opacity(0.35))
-                    .clipped()
-            }
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 14) {
-                    PximgImage(url: acc?.avatar)
-                        .frame(width: 68, height: 68)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 2))
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(acc?.name ?? "未登录").font(.title2.bold())
-                            if acc?.isPremium == true { PillTag("Premium", .orange) }
-                        }
-                        if let uid = acc?.userId, let id = Int(uid) {
-                            NavigationLink(value: Route.user(id)) {
-                                HStack(spacing: 2) {
-                                    Text("查看自己的个人页面")
-                                    Image(systemName: "chevron.right").font(.caption)
-                                }
-                                .font(.subheadline)
+                    .frame(width: 72, height: 72)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(.white, lineWidth: 2.5))
+                    .shadow(color: .black.opacity(0.3), radius: 6)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(acc?.name ?? "未登录").font(.title2.bold()).lineLimit(1)
+                        if acc?.isPremium == true { PillTag("Premium", .orange) }
+                    }
+                    if let uid = acc?.userId, let id = Int(uid) {
+                        NavigationLink(value: Route.user(id)) {
+                            HStack(spacing: 3) {
+                                Text("查看自己的个人页面")
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                             }
-                            .buttonStyle(.plain)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.9))
                         }
                     }
-                    Spacer()
                 }
-                HStack(spacing: 0) {
-                    stat("\(library.history.count)", "已读作品")
-                    stat("\(authors.users.count)\(authors.users.count >= 30 ? "+" : "")", "关注")
-                    stat(String(format: "%.0f%%", averageProgress * 100), "平均进度")
-                }
-                .padding(.vertical, 10)
-                .glassBackground(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 20)
-            .padding(.top, 70)
-            .padding(.bottom, 18)
+            HStack(spacing: 0) {
+                stat("\(library.history.count)", "已读作品")
+                Rectangle().fill(.white.opacity(0.25)).frame(width: 0.5, height: 28)
+                stat("\(authors.users.count)\(authors.users.count >= 30 ? "+" : "")", "关注")
+                Rectangle().fill(.white.opacity(0.25)).frame(width: 0.5, height: 28)
+                stat(String(format: "%.0f%%", averageProgress * 100), "平均进度")
+            }
+            .padding(.vertical, 12)
+            .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .frame(maxWidth: .infinity)
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        .padding(.horizontal, 20)
+        .padding(.top, topInset + 28)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                PximgImage(url: acc?.avatar)
+                    .scaleEffect(1.6)
+                    .blur(radius: 40)
+                    .saturation(1.4)
+                LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+            }
+            .clipped()
+        }
+    }
+
+    private var topInset: CGFloat {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.windows.first?.safeAreaInsets.top ?? 47
     }
 
     private var averageProgress: Double {
@@ -149,7 +172,10 @@ struct LibraryView: View {
                     Text("已读 \(Int(r.percent * 100))% · \(RelativeTime.string(r.updatedAt))")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
+                Image(systemName: "play.circle.fill").font(.title).foregroundStyle(.purple)
             }
+            .padding(14)
+            .contentShape(Rectangle())
         }
     }
 }
@@ -159,6 +185,7 @@ struct MenuRow: View {
     let color: Color
     let title: String
     var detail: String? = nil
+    var chevron = true
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
@@ -169,7 +196,11 @@ struct MenuRow: View {
             Text(title)
             Spacer()
             if let detail { Text(detail).foregroundStyle(.secondary) }
+            if chevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 }
 
