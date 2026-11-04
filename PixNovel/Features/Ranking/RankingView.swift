@@ -76,7 +76,16 @@ final class RankingModel: ObservableObject {
     private var order: [Int] = []
     private var task: Task<Void, Never>?
 
-    func load(period: RankPeriod, category: RankCategory, date: Date?, r18: R18Mode) {
+    private var loadedKey: String?
+
+    /// 同一组参数已加载过则不重复请求（切换标签返回时）
+    func loadIfNeeded(key: String, period: RankPeriod, category: RankCategory, date: Date?, r18: R18Mode) {
+        guard key != loadedKey else { return }
+        loadedKey = key
+        load(period: period, category: category, date: date, r18: r18, force: false)
+    }
+
+    func load(period: RankPeriod, category: RankCategory, date: Date?, r18: R18Mode, force: Bool) {
         task?.cancel()
         raw = [:]; order = []; ranks = [:]; items = []; loadedCount = 0; progress = 0; error = nil; note = nil
         synthesized = period.isSynthesized
@@ -95,35 +104,30 @@ final class RankingModel: ObservableObject {
         var jobs: [(RankingMode, Date?, Int)] = []
         switch period {
         case .day, .week:
-            jobs = modes.map { ($0, date, 20) }
+            jobs = modes.map { ($0, date, 15) }
         case .month:
-            for m in modes { for w in 0..<4 { jobs.append((m, cal.date(byAdding: .day, value: -7 * w, to: anchor), 5)) } }
+            for m in modes { for w in 0..<4 { jobs.append((m, cal.date(byAdding: .day, value: -7 * w, to: anchor), 3)) } }
         case .year:
-            for m in modes { for w in 0..<52 { jobs.append((m, cal.date(byAdding: .day, value: -7 * w, to: anchor), 2)) } }
+            for m in modes { for w in 0..<52 { jobs.append((m, cal.date(byAdding: .day, value: -7 * w, to: anchor), 1)) } }
         }
         loading = true
         let total = Double(jobs.count)
         task = Task {
+            // 逐个加载（全局限速器控制节奏），每页到达即刷新列表
             var done = 0.0
-            var idx = 0
-            let batch = 6
-            while idx < jobs.count && !Task.isCancelled {
-                let slice = Array(jobs[idx..<min(idx + batch, jobs.count)])
-                await withTaskGroup(of: Void.self) { group in
-                    for j in slice {
-                        group.addTask { await self.loadMode(j.0, date: j.1, maxPages: j.2) }
-                    }
-                    for await _ in group { done += 1; self.progress = done / total }
-                }
-                idx += batch
+            for j in jobs {
+                if Task.isCancelled { return }
+                await self.loadMode(j.0, date: j.1, maxPages: j.2, force: force)
+                done += 1
+                self.progress = done / total
             }
             if !Task.isCancelled { self.loading = false }
         }
     }
 
-    private func loadMode(_ mode: RankingMode, date: Date?, maxPages: Int) async {
+    private func loadMode(_ mode: RankingMode, date: Date?, maxPages: Int, force: Bool) async {
         do {
-            var r = try await PixivAPI.shared.ranking(mode: mode, date: date)
+            var r = try await PixivAPI.shared.ranking(mode: mode, date: date, force: force)
             var rank = 0, pages = 0
             while !Task.isCancelled {
                 for n in r.novels {
@@ -136,7 +140,7 @@ final class RankingModel: ObservableObject {
                 apply()
                 pages += 1
                 guard let next = r.nextUrl, pages < maxPages else { break }
-                r = try await PixivAPI.shared.get(next: next)
+                r = try await PixivAPI.shared.rankingNext(next, force: force)
             }
         } catch {
             // 合成榜单中个别周期失败不影响整体
@@ -194,7 +198,7 @@ struct RankingView: View {
             }
         }
         .listStyle(.plain)
-        .refreshable { reload() }
+        .refreshable { reload(force: true) }
         .safeAreaInset(edge: .top, spacing: 0) {
             GlassHeader {
                 Picker("榜单", selection: $period) {
@@ -213,7 +217,7 @@ struct RankingView: View {
             ToolbarItem(placement: .navigationBarTrailing) { filterMenu }
         }
         .sheet(isPresented: $showDate) { dateSheet }
-        .task(id: loadKey) { reload() }
+        .task(id: loadKey) { reload(force: false) }
         .onChange(of: period) { p in
             if !RankCategory.available(for: p).contains(category) { category = .general }
         }
@@ -250,14 +254,14 @@ struct RankingView: View {
         } else if let e = model.error, model.items.isEmpty {
             VStack(spacing: 8) {
                 Text(e).font(.footnote).foregroundStyle(.red)
-                Button("重试") { reload() }.glassButton()
+                Button("重试") { reload(force: true) }.glassButton()
             }.frame(maxWidth: .infinity)
         } else if model.items.isEmpty {
             Text(settings.chineseOnly ? "榜单中没有识别到中文作品\n可在右上角筛选中关闭「仅中文」" : "暂无内容")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 24)
         } else if model.synthesized {
-            Text(period == .month ? "月榜由最近 4 期周榜合并，按收藏数排序" : "年榜由最近 52 期周榜前 60 名合并，按收藏数排序")
+            Text(period == .month ? "月榜由最近 4 期周榜合并，按收藏数排序" : "年榜由最近 52 期周榜前 30 名合并，按收藏数排序（已缓存，再次打开无需等待）")
                 .font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
                 .listRowSeparator(.hidden)
         }
@@ -301,7 +305,11 @@ struct RankingView: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func reload() {
-        model.load(period: period, category: category, date: useDate ? date : nil, r18: settings.r18Mode)
+    private func reload(force: Bool) {
+        if force {
+            model.load(period: period, category: category, date: useDate ? date : nil, r18: settings.r18Mode, force: true)
+        } else {
+            model.loadIfNeeded(key: loadKey, period: period, category: category, date: useDate ? date : nil, r18: settings.r18Mode)
+        }
     }
 }

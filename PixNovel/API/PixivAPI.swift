@@ -126,8 +126,24 @@ final class PixivAPI {
             req.httpBody = FormEncoder.encode(form).data(using: .utf8)
             req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         }
-        let (data, resp) = try await session.data(for: req)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        // 全局限速 + 429 退避重试
+        var attempt = 0
+        var data = Data(), code = 0
+        while true {
+            await RateLimiter.shared.acquire()
+            do {
+                let (d, resp) = try await session.data(for: req)
+                await RateLimiter.shared.release()
+                data = d
+                code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            } catch {
+                await RateLimiter.shared.release()
+                throw error
+            }
+            guard code == 429, attempt < 3 else { break }
+            attempt += 1
+            await RateLimiter.shared.penalize(seconds: Double(1 << attempt))   // 2s / 4s / 8s
+        }
         if (200..<300).contains(code) { return data }
         let err = PixivError.http(code, String(data: data, encoding: .utf8) ?? "")
         if retry && err.isTokenProblem {
@@ -161,9 +177,17 @@ final class PixivAPI {
         try await get("/v1/novel/recommended", ["include_ranking_novels": "true", "filter": "for_ios", "include_privacy_policy": "true"])
     }
 
-    func ranking(mode: RankingMode, date: Date?) async throws -> NovelListResponse {
-        try await get("/v1/novel/ranking", ["mode": mode.rawValue, "filter": "for_ios",
-                                            "date": date.map { PixivDate.ymd.string(from: $0) }])
+    func ranking(mode: RankingMode, date: Date?, force: Bool = false) async throws -> NovelListResponse {
+        let url = makeURL("/v1/novel/ranking", ["mode": mode.rawValue, "filter": "for_ios",
+                                                "date": date.map { PixivDate.ymd.string(from: $0) }])
+        return try await decode(ResponseCache.shared.data(for: url, permanent: date != nil, force: force) { try await self.raw(url) })
+    }
+
+    /// 榜单翻页（带缓存）
+    func rankingNext(_ next: String, force: Bool = false) async throws -> NovelListResponse {
+        guard let url = URL(string: next) else { throw PixivError.parse("next_url") }
+        let permanent = next.contains("date=")
+        return try await decode(ResponseCache.shared.data(for: url, permanent: permanent, force: force) { try await self.raw(url) })
     }
 
     func followNew(restrict: String = "all") async throws -> NovelListResponse {
@@ -265,5 +289,69 @@ final class PixivAPI {
         let data = try await raw(makeURL("/webview/v2/novel", ["id": String(id), "viewer_version": "20221031_ai"]))
         guard let html = String(data: data, encoding: .utf8) else { throw PixivError.parse("正文编码") }
         return try NovelContentParser.parseWebview(html: html, id: id)
+    }
+}
+
+
+/// 全局请求限速：最多 2 个并发，相邻请求间隔 ≥ 0.3 秒；被 429 时整体暂停
+actor RateLimiter {
+    static let shared = RateLimiter()
+    private let maxConcurrent = 2
+    private let spacing: TimeInterval = 0.3
+    private var running = 0
+    private var nextAllowed = Date.distantPast
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        while running >= maxConcurrent {
+            await withCheckedContinuation { waiters.append($0) }
+        }
+        running += 1
+        let now = Date()
+        let start = max(now, nextAllowed)
+        nextAllowed = start.addingTimeInterval(spacing)
+        let wait = start.timeIntervalSince(now)
+        if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+    }
+
+    func release() {
+        running = max(0, running - 1)
+        if !waiters.isEmpty { waiters.removeFirst().resume() }
+    }
+
+    func penalize(seconds: TimeInterval) async {
+        nextAllowed = max(nextAllowed, Date().addingTimeInterval(seconds))
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+}
+
+/// 响应缓存：内存 30 分钟；历史榜单（不会再变）写入磁盘永久缓存
+actor ResponseCache {
+    static let shared = ResponseCache()
+    private var memory: [String: (Date, Data)] = [:]
+    private let ttl: TimeInterval = 30 * 60
+    private let dir: URL = {
+        let d = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("api-cache")
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
+    func data(for url: URL, permanent: Bool, force: Bool, fetch: () async throws -> Data) async throws -> Data {
+        let key = url.absoluteString
+        let file = dir.appendingPathComponent(Hashing.md5(key) + ".json")
+        if !force {
+            if let e = memory[key], Date().timeIntervalSince(e.0) < ttl { return e.1 }
+            if permanent, let d = try? Data(contentsOf: file) { memory[key] = (Date(), d); return d }
+        }
+        let d = try await fetch()
+        memory[key] = (Date(), d)
+        if permanent { try? d.write(to: file, options: .atomic) }
+        return d
+    }
+
+    func clear() {
+        memory = [:]
+        try? FileManager.default.removeItem(at: dir)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }
 }
