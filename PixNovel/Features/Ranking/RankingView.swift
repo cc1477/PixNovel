@@ -201,10 +201,15 @@ struct RankingView: View {
     var body: some View {
         List {
             Section {
-                ForEach(Array(model.items.enumerated()), id: \.element.id) { idx, n in
+                if model.items.count >= 3 {
+                    podium
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                }
+                ForEach(Array(model.items.enumerated()).dropFirst(model.items.count >= 3 ? 3 : 0), id: \.element.id) { idx, n in
                     NavigationLink(value: Route.novel(n)) {
-                        NovelRow(novel: n, rank: model.synthesized ? idx + 1 : model.ranks[n.id],
-                                 badge: model.localSort.flatMap { HotRanker.badge(n, metric: $0, gravity: settings.hotGravity) })
+                        RankedRow(novel: n, rank: displayRank(idx, n),
+                                  badge: model.localSort.flatMap { HotRanker.badge(n, metric: $0, gravity: settings.hotGravity) })
                     }
                     .swipeActions(edge: .trailing) {
                         BookmarkSwipe(novel: n) { model.updateBookmark(n.id, $0) }
@@ -225,6 +230,7 @@ struct RankingView: View {
                 .pickerStyle(.segmented)
             }
         }
+        .tint(.orange)
         .navigationTitle("热榜")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -241,6 +247,26 @@ struct RankingView: View {
         }
         .onChange(of: settings.chineseOnly) { _ in model.apply() }
         .pixivDestinations()
+    }
+
+    private func displayRank(_ idx: Int, _ n: Novel) -> Int? {
+        (model.synthesized || model.localSort != nil) ? idx + 1 : model.ranks[n.id]
+    }
+
+    /// 前三名横向大卡片
+    private var podium: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ForEach(Array(model.items.prefix(3).enumerated()), id: \.element.id) { idx, n in
+                    NavigationLink(value: Route.novel(n)) {
+                        PodiumCard(novel: n, rank: displayRank(idx, n) ?? idx + 1)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
     }
 
     private var header: some View {
