@@ -194,3 +194,28 @@ struct Account: Codable, Equatable {
     var accessToken: String
     var expiresAt: Date
 }
+
+// MARK: - 评论
+
+struct PixivComment: Decodable, Identifiable, Hashable {
+    struct Stamp: Decodable, Hashable { var stampId: Int?; var stampUrl: String? }
+    var id: Int
+    var comment: String?
+    var date: String?
+    var user: PixivUser
+    var hasReplies: Bool?
+    var stamp: Stamp?
+
+    static func == (l: PixivComment, r: PixivComment) -> Bool { l.id == r.id }
+    func hash(into h: inout Hasher) { h.combine(id) }
+}
+
+struct CommentsResponse: Decodable {
+    var comments: [PixivComment]
+    var nextUrl: String?
+    var totalComments: Int?
+}
+
+struct CommentAddResponse: Decodable {
+    var comment: PixivComment
+}

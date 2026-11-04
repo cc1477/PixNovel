@@ -6,6 +6,7 @@ struct NovelDetailView: View {
     @EnvironmentObject var settings: AppSettings
     @State private var busy = false
     @State private var error: String?
+    @State private var showComments = false
 
     var body: some View {
         ScrollView {
@@ -69,6 +70,19 @@ struct NovelDetailView: View {
                 }
                 .controlSize(.large)
 
+                Button { showComments = true } label: {
+                    HStack {
+                        Image(systemName: "text.bubble.fill").foregroundStyle(.tint)
+                        Text("评论区")
+                        Text("\(novel.totalComments ?? 0)").foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
+                    }
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+
                 if let error { Text(error).font(.footnote).foregroundStyle(.red) }
 
                 if let tags = novel.tags, !tags.isEmpty {
@@ -104,6 +118,10 @@ struct NovelDetailView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 ShareLink(item: URL(string: "https://www.pixiv.net/novel/show.php?id=\(novel.id)")!)
             }
+        }
+        .sheet(isPresented: $showComments) {
+            CommentsView(novelId: novel.id, title: novel.title)
+                .presentationDetents([.medium, .large])
         }
         .task {
             if let fresh = try? await PixivAPI.shared.detail(novel.id) { novel = fresh }

@@ -283,6 +283,25 @@ final class PixivAPI {
         try await post("/v1/watchlist/novel/add", ["series_id": String(seriesId)])
     }
 
+    // MARK: 评论
+
+    func comments(novelId: Int) async throws -> CommentsResponse {
+        do { return try await get("/v3/novel/comments", ["novel_id": String(novelId)]) }
+        catch PixivError.http(404, _) { return try await get("/v1/novel/comments", ["novel_id": String(novelId)]) }
+    }
+
+    func commentReplies(_ commentId: Int) async throws -> CommentsResponse {
+        try await get("/v2/novel/comment/replies", ["comment_id": String(commentId)])
+    }
+
+    func addComment(novelId: Int, text: String, parent: Int?) async throws -> PixivComment {
+        var form = ["novel_id": String(novelId), "comment": text]
+        if let parent { form["parent_comment_id"] = String(parent) }
+        let data = try await raw(makeURL("/v1/novel/comment/add", [:]), method: "POST", form: form)
+        let r: CommentAddResponse = try decode(data)
+        return r.comment
+    }
+
     // MARK: 正文
 
     func content(_ id: Int) async throws -> NovelContent {

@@ -148,6 +148,7 @@ struct ReaderView: View {
     @State private var showControls = false
     @State private var showSettings = false
     @State private var showTOC = false
+    @State private var showComments = false
     @State private var visible = Set<Int>()
     @State private var scrollTarget: Int?
     @State private var sliderValue = 0.0
@@ -184,7 +185,8 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(!showControls)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button { showComments = true } label: { Image(systemName: "text.bubble") }
                 BookmarkToolbarButton(novel: $model.novel)
             }
         }
@@ -195,6 +197,10 @@ struct ReaderView: View {
         }
         .overlay(alignment: .topTrailing) {
             if !showControls && !model.flat.isEmpty { progressBadge }
+        }
+        .sheet(isPresented: $showComments) {
+            CommentsView(novelId: model.novel.id, title: model.novel.title)
+                .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showSettings) {
             ReaderSettingsSheet().presentationDetents([.medium, .large])
@@ -379,6 +385,10 @@ struct ReaderView: View {
     private var footer: some View {
         VStack(spacing: 14) {
             Text("— 完 —").font(.footnote).foregroundStyle(theme.foreground.opacity(0.5))
+            Button { showComments = true } label: {
+                Label("查看评论（\(model.novel.totalComments ?? 0)）", systemImage: "text.bubble")
+            }
+            .glassButton()
             if let n = model.content?.nextNovel {
                 Button { Task { await model.open(novelId: n.id) } } label: {
                     VStack(spacing: 2) {
