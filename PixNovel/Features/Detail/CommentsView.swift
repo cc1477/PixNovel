@@ -112,7 +112,7 @@ struct CommentsView: View {
                             }
                             .font(.caption).foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                         .padding(.leading, 46)
                         .listRowSeparator(.hidden)
                     }
@@ -178,6 +178,31 @@ struct CommentsView: View {
             }
         }
         .padding(.horizontal).padding(.vertical, 8)
+        .background(.bar)
+    }
+}
+
+/// pixiv 评论表情 (xxx) -> emoji
+enum PixivEmoji {
+    static let map: [String: String] = [
+        "normal": "🙂", "surprise": "😮", "serious": "😐", "heaven": "😇", "happy": "😄", "excited": "🤩",
+        "sing": "🎵", "cry": "😢", "normal2": "😊", "shame2": "😳", "love2": "😍", "interesting2": "😆",
+        "blush2": "☺️", "fire2": "🔥", "angry2": "😠", "shine2": "✨", "panic2": "😱", "normal3": "😌",
+        "satisfaction3": "😋", "surprise3": "😲", "smile4": "😁", "shock4": "😨", "gaze4": "👀",
+        "wink5": "😉", "happy5": "😃", "excited5": "🥳", "love5": "🥰", "mischievous": "😏",
+        "dog": "🐶", "cat": "🐱", "kiss": "😘", "deny": "🙅", "rich": "🤑", "embarrassed": "😅",
+        "shy": "🙈", "good": "👍", "beer": "🍺", "luck": "🍀", "heart": "❤️", "cool": "😎", "pout": "😤",
+        "yawn": "🥱", "sleepy": "😪", "laugh": "🤣", "awkward": "😬", "sweat": "😓", "sad": "😞"
+    ]
+    private static let re = try! NSRegularExpression(pattern: #"\(([a-z]+[0-9]?)\)"#)
+    static func replace(_ s: String) -> String {
+        let ns = s as NSString
+        var out = s
+        for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let key = ns.substring(with: m.range(at: 1))
+            if let e = map[key], let r = Range(m.range, in: out) { out.replaceSubrange(r, with: e) }
+        }
+        return out
     }
 }
 
@@ -188,12 +213,9 @@ struct CommentRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            NavigationLink(value: Route.user(comment.user.id)) {
-                PximgImage(url: comment.user.profileImageUrls?.medium)
-                    .frame(width: small ? 26 : 36, height: small ? 26 : 36)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
+            PximgImage(url: comment.user.profileImageUrls?.medium)
+                .frame(width: small ? 26 : 36, height: small ? 26 : 36)
+                .clipShape(Circle())
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(comment.user.name).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -203,10 +225,11 @@ struct CommentRow: View {
                 if let s = comment.stamp?.stampUrl {
                     PximgImage(url: s, contentMode: .fit).frame(width: 72, height: 72)
                 } else {
-                    Text(comment.comment ?? "").font(small ? .footnote : .callout).textSelection(.enabled)
+                    Text(PixivEmoji.replace(comment.comment ?? "")).font(small ? .footnote : .callout).textSelection(.enabled)
                 }
-                Button("回复", action: onReply).font(.caption).foregroundStyle(.secondary).buttonStyle(.plain)
+                Button("回复", action: onReply).font(.caption).foregroundStyle(.secondary).buttonStyle(.borderless)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 4)
     }
