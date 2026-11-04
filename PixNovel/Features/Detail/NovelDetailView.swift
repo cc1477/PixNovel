@@ -164,7 +164,7 @@ struct SeriesView: View {
 
     init(seriesId: Int) {
         self.seriesId = seriesId
-        _model = StateObject(wrappedValue: NovelListModel { try await PixivAPI.shared.seriesAsList(seriesId) })
+        _model = StateObject(wrappedValue: NovelListModel(contentFilter: false) { try await PixivAPI.shared.seriesAsList(seriesId) })
     }
 
     var body: some View {
@@ -238,7 +238,7 @@ struct UserView: View {
 
     init(userId: Int) {
         self.userId = userId
-        _model = StateObject(wrappedValue: NovelListModel { try await PixivAPI.shared.userNovels(userId) })
+        _model = StateObject(wrappedValue: NovelListModel(contentFilter: false) { try await PixivAPI.shared.userNovels(userId) })
     }
 
     var body: some View {

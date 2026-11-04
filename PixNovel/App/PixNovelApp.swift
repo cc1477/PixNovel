@@ -56,16 +56,14 @@ final class SessionStore: ObservableObject {
 struct RootTabView: View {
     var body: some View {
         TabView {
-            NavigationStack { HomeView() }
-                .tabItem { Label("推荐", systemImage: "sparkles") }
             NavigationStack { RankingView() }
-                .tabItem { Label("排行", systemImage: "crown") }
+                .tabItem { Label("热榜", systemImage: "flame") }
+            NavigationStack { FollowingView() }
+                .tabItem { Label("关注", systemImage: "person.2") }
             NavigationStack { SearchView() }
-                .tabItem { Label("热度搜索", systemImage: "flame") }
+                .tabItem { Label("搜索", systemImage: "magnifyingglass") }
             NavigationStack { LibraryView() }
-                .tabItem { Label("书架", systemImage: "books.vertical") }
-            NavigationStack { SettingsView() }
-                .tabItem { Label("设置", systemImage: "gearshape") }
+                .tabItem { Label("我的", systemImage: "person.crop.circle") }
         }
     }
 }

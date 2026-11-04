@@ -45,12 +45,15 @@ struct SettingsView: View {
             } header: { Text("热度排序") }
 
             Section {
-                Toggle("显示 R-18 内容", isOn: $settings.showR18)
+                Toggle("仅显示中文作品", isOn: $settings.chineseOnly)
+                Picker("R18", selection: $settings.r18Mode) {
+                    ForEach(R18Mode.allCases) { Text($0.title).tag($0) }
+                }
                 TextField("屏蔽标签（空格分隔）", text: $mutedText)
                     .onSubmit { saveMuted() }
                 Button("保存屏蔽标签") { saveMuted() }
             } header: { Text("内容") } footer: {
-                Text("R-18 内容还需在 Pixiv 网页版「浏览限制」中开启。")
+                Text("中文识别基于标题、简介和标签的文字特征。R-18 内容需先在 Pixiv 网页版「设置 → 浏览限制」中开启。")
             }
 
             Section {

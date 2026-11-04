@@ -113,9 +113,10 @@ final class NovelListModel: ObservableObject {
     private var loader: Loader
     private var seen = Set<Int>()
 
-    init(localSort: HotMetric? = nil, loader: @escaping Loader) {
+    init(localSort: HotMetric? = nil, contentFilter: Bool = true, loader: @escaping Loader) {
         self.loader = loader
         self.localSort = localSort
+        self.useContentFilter = contentFilter
     }
 
     func setLoader(_ l: @escaping Loader) { loader = l }
@@ -165,16 +166,28 @@ final class NovelListModel: ObservableObject {
         applySort()
     }
 
+    /// 是否应用「仅中文 / R18」内容筛选（收藏夹等列表可关闭）
+    var useContentFilter = true
+
+    var rawCount: Int { raw.count }
+
+    func reapply() { applySort() }
+
     private func applySort() {
         let s = AppSettings.shared
-        let visible = raw.filter { n in
-            if n.isMuted == true { return false }
-            if !s.showR18 && n.isR18 { return false }
-            let tags = n.tagNames
-            return !s.mutedTags.contains { m in tags.contains { $0.localizedCaseInsensitiveContains(m) } }
-        }
+        let f = useContentFilter ? s.contentFilter : ContentFilter(chineseOnly: false, r18: .all, mutedTags: s.mutedTags)
+        let visible = raw.filter(f.accept)
         if let m = localSort { items = HotRanker.sort(visible, by: m, gravity: s.hotGravity) }
         else { items = visible }
+    }
+
+    /// 筛选后结果太少时自动继续翻页
+    func fillUntil(_ minimum: Int, maxPages: Int) async {
+        var pages = 0
+        while items.count < minimum && nextURL != nil && pages < maxPages && !Task.isCancelled {
+            await loadMore()
+            pages += 1
+        }
     }
 
     func updateBookmark(_ id: Int, _ v: Bool) {

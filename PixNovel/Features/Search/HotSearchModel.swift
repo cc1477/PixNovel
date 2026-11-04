@@ -32,6 +32,7 @@ final class HotSearchModel: ObservableObject {
 
     var progress: Double { totalJobs == 0 ? 0 : Double(doneJobs) / Double(totalJobs) }
     var hasSearched: Bool { !pool.isEmpty || isLoading }
+    var poolCount: Int { pool.count }
 
     func cancel() { task?.cancel(); isLoading = false }
 
@@ -150,7 +151,8 @@ final class HotSearchModel: ObservableObject {
     /// 重新排序（指标或过滤变化时调用，不重新请求）
     func resort() {
         let s = AppSettings.shared
-        let filtered = pool.values.filter { filter.accept($0, hideR18: !s.showR18, mutedTags: s.mutedTags) }
+        let content = s.contentFilter
+        let filtered = pool.values.filter { filter.accept($0, content: content) }
         results = HotRanker.sort(filtered, by: metric, gravity: s.hotGravity)
     }
 

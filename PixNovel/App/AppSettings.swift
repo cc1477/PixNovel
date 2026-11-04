@@ -66,7 +66,8 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
     private let d = UserDefaults.standard
 
-    @Published var showR18: Bool { didSet { d.set(showR18, forKey: "showR18") } }
+    @Published var chineseOnly: Bool { didSet { d.set(chineseOnly, forKey: "chineseOnly") } }
+    @Published var r18Mode: R18Mode { didSet { d.set(r18Mode.rawValue, forKey: "r18Mode") } }
     @Published var imageProxy: String { didSet { d.set(imageProxy, forKey: "imageProxy") } }
     @Published var defaultMetric: HotMetric { didSet { d.set(defaultMetric.rawValue, forKey: "defaultMetric") } }
     @Published var scanDepth: Int { didSet { d.set(scanDepth, forKey: "scanDepth") } }
@@ -86,13 +87,14 @@ final class AppSettings: ObservableObject {
 
     private init() {
         d.register(defaults: [
-            "showR18": false, "imageProxy": "", "defaultMetric": HotMetric.bookmarks.rawValue,
+            "chineseOnly": true, "r18Mode": R18Mode.all.rawValue, "imageProxy": "", "defaultMetric": HotMetric.bookmarks.rawValue,
             "scanDepth": 10, "hotGravity": 0.6, "preferServerPopular": true, "mutedTags": [String](),
             "r.fontSize": 18.0, "r.lineSpacing": 8.0, "r.paragraphSpacing": 14.0, "r.padding": 20.0,
             "r.theme": ReaderTheme.light.rawValue, "r.font": ReaderFont.system.rawValue,
             "r.layout": ReaderLayout.scroll.rawValue, "r.keepAwake": true, "r.indent": false
         ])
-        showR18 = d.bool(forKey: "showR18")
+        chineseOnly = d.bool(forKey: "chineseOnly")
+        r18Mode = R18Mode(rawValue: d.string(forKey: "r18Mode") ?? "") ?? .all
         imageProxy = d.string(forKey: "imageProxy") ?? ""
         defaultMetric = HotMetric(rawValue: d.string(forKey: "defaultMetric") ?? "") ?? .bookmarks
         scanDepth = d.integer(forKey: "scanDepth")
@@ -108,6 +110,10 @@ final class AppSettings: ObservableObject {
         readerLayout = ReaderLayout(rawValue: d.string(forKey: "r.layout") ?? "") ?? .scroll
         keepAwake = d.bool(forKey: "r.keepAwake")
         firstLineIndent = d.bool(forKey: "r.indent")
+    }
+
+    var contentFilter: ContentFilter {
+        ContentFilter(chineseOnly: chineseOnly, r18: r18Mode, mutedTags: mutedTags)
     }
 
     /// 图片地址：可选替换为反代域名（如 i.pixiv.re）

@@ -46,6 +46,8 @@ struct SearchView: View {
                 }
             }
             .onChange(of: model.metric) { _ in model.resort() }
+            .onChange(of: settings.chineseOnly) { _ in model.resort() }
+            .onChange(of: settings.r18Mode) { _ in model.resort() }
             .onAppear {
                 guard !didInit else { return }
                 didInit = true
@@ -150,7 +152,7 @@ struct SearchView: View {
                 }
             } header: {
                 if !model.results.isEmpty {
-                    Text("共 \(model.results.count) 篇 · 按\(model.metric.title)")
+                    Text("筛选后 \(model.results.count) 篇 · 按\(model.metric.title)排序")
                 }
             }
         }
@@ -174,6 +176,9 @@ struct SearchView: View {
                 }
                 .padding(.horizontal)
             }
+
+            ContentFilterBar(status: "\(model.results.count)/\(model.poolCount) 篇")
+                .padding(.horizontal)
 
             HStack(spacing: 8) {
                 Menu {

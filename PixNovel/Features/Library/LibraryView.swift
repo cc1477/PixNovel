@@ -9,8 +9,9 @@ struct LibraryView: View {
     @EnvironmentObject var session: SessionStore
     @EnvironmentObject var library: LocalLibrary
     @State private var tab: Tab = .history
-    @StateObject private var publicModel = NovelListModel { throw PixivError.notLoggedIn }
-    @StateObject private var privateModel = NovelListModel { throw PixivError.notLoggedIn }
+    // 收藏夹不按中文 / R18 筛选
+    @StateObject private var publicModel = NovelListModel(contentFilter: false) { throw PixivError.notLoggedIn }
+    @StateObject private var privateModel = NovelListModel(contentFilter: false) { throw PixivError.notLoggedIn }
 
     var body: some View {
         Group {
@@ -28,9 +29,12 @@ struct LibraryView: View {
             .padding(.horizontal).padding(.bottom, 6)
             .background(.bar)
         }
-        .navigationTitle("书架")
+        .navigationTitle("我的")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 switch tab {
                 case .history:

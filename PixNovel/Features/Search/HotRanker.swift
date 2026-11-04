@@ -102,16 +102,15 @@ struct HotFilter: Equatable, Codable {
     var seriesOnly = false
     var excludeTags: [String] = []
 
-    func accept(_ n: Novel, hideR18: Bool, mutedTags: [String]) -> Bool {
-        if n.isMuted == true { return false }
-        if hideR18 && n.isR18 { return false }
+    func accept(_ n: Novel, content: ContentFilter) -> Bool {
+        if !content.accept(n) { return false }
         if hideAI && n.isAI { return false }
         if originalOnly && n.isOriginal != true { return false }
         if seriesOnly && n.series?.id == nil { return false }
         if n.bookmarks < minBookmarks { return false }
         if n.length < minLength { return false }
         if maxLength > 0 && n.length > maxLength { return false }
-        let block = excludeTags + mutedTags
+        let block = excludeTags
         if !block.isEmpty {
             let tags = n.tagNames
             for t in block where !t.isEmpty {
